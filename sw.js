@@ -1,6 +1,6 @@
 // HydraForge Station · Offline-Hülle. Daten kommen immer frisch vom Server.
-const C = 'hf-station-v4';
-const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'vendor/supabase.js', 'manifest.webmanifest', 'icon-192.png', 'hub.png'];
+const C = 'hf-station-v5';
+const SHELL = ['./', 'index.html', 'app.js', 'style.css', 'vendor/supabase.js', 'manifest.webmanifest', 'icon-192.png', 'orb.webp'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(C).then(c => c.addAll(SHELL)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== C).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

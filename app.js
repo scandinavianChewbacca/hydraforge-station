@@ -10,7 +10,7 @@
   const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
   const hhmm = t => new Date(t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
   const store = { get: k => { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* privat */ } }, del: k => { try { localStorage.removeItem(k); } catch (e) { /* privat */ } } };
-  const S = { runImgs: {}, itemImgs: {}, animSel: {}, animFor: null, gameFor: null, assetHl: null, sb: null, user: null, projects: [], st: null, cmds: [], err: '', busy: false, drafts: {}, sent: {}, at: 0, tab: store.get('hf_tab') || 'station', sig: '', flash: null, usage: null, shots: {}, logOpen: {}, noStation: false, sel: null };
+  const S = { resOpen: {}, anShow: 8, runImgs: {}, itemImgs: {}, animSel: {}, animFor: null, gameFor: null, assetHl: null, sb: null, user: null, projects: [], st: null, cmds: [], err: '', busy: false, drafts: {}, sent: {}, at: 0, tab: store.get('hf_tab') || 'station', sig: '', flash: null, usage: null, shots: {}, logOpen: {}, noStation: false, sel: null };
 
   function config() {
     const h = new URLSearchParams(location.hash.slice(1));
@@ -68,6 +68,20 @@
   function flash(t, bad) { S.flash = { t: t, bad: !!bad, at: Date.now() }; render(); setTimeout(() => { if (S.flash && Date.now() - S.flash.at > 4500) { S.flash = null; render(); } }, 5000); }
 
   // ---------- Anzeige ----------
+  // 0.15.2: Kopieren-Knopf oben links. Texte liegen in S.cp, das Spieltest-Bild wird kopiert oder geteilt.
+  const CPI = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  function cpBtn(text) { S.cp = S.cp || {}; const t = String(text || ''); let h = 0; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; const id = 'c' + (h >>> 0).toString(36) + t.length; S.cp[id] = t; return '<button class="cpb" data-act="cpTxt" data-k="' + id + '" aria-label="Kopieren">' + CPI + '</button>'; }
+  const cpw = (inner, text) => '<div class="cpw">' + inner + cpBtn(text) + '</div>';
+  async function cpImg(url) {
+    try {
+      const blob0 = await (await fetch(url)).blob(); const img = await createImageBitmap(blob0); const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0);
+      const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+      try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); flash('Bild kopiert.'); return; } catch (e) { /* Handy-Browser ohne Bild-Zwischenablage */ }
+      const f = new File([blob], 'spieltest.png', { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'Spieltest' }); return; }
+      flash('Dieser Browser kann Bilder nicht kopieren. Halte den Finger auf das Bild.', true);
+    } catch (e) { if (e && e.name !== 'AbortError') flash('Kopieren ging nicht.', true); }
+  }
   function meter(pct, c) { return '<div class="meter"><i style="width:' + Math.round(Math.max(0, Math.min(1, pct)) * 100) + '%;background:' + (c || 'var(--acc)') + '"></i></div>'; }
   function vLogin() {
     const c = config();
@@ -84,6 +98,15 @@
   const BOT = (c, idle) => '<svg width="26" height="32" viewBox="0 0 26 32" aria-hidden="true" class="bsvg"><line x1="13" y1="1.5" x2="13" y2="5" stroke="' + (idle ? '#8C9BB3' : '#C9D6EA') + '" stroke-width="1.4"/><circle cx="13" cy="1.8" r="1.6" fill="' + c + '"/><rect x="3" y="5" width="20" height="15" rx="7" fill="' + (idle ? '#AEB8C8' : '#E9EEF7') + '"/><rect x="6" y="8.5" width="14" height="8" rx="4" fill="#0B1426"/>' +
     (idle ? '<rect x="8.5" y="12" width="3" height="1.4" rx=".7" fill="' + c + '"/><rect x="14.5" y="12" width="3" height="1.4" rx=".7" fill="' + c + '"/>' : '<rect class="eye" x="8.5" y="11" width="3" height="3" rx="1.5" fill="' + c + '"/><rect class="eye" x="14.5" y="11" width="3" height="3" rx="1.5" fill="' + c + '"/>') +
     '<rect x="7" y="20.5" width="12" height="7.5" rx="3" fill="' + (idle ? '#9AA6B8' : '#D9E2F0') + '"/><rect x="10.5" y="23" width="5" height="2" rx="1" fill="' + c + '"/><rect x="8" y="28" width="3.5" height="4" rx="1.4" fill="#5B6B86"/><rect x="14.5" y="28" width="3.5" height="4" rx="1.4" fill="#5B6B86"/></svg>';
+  function orbHtml(src, st, title) {
+    // 0.15.2: Hydra-Aufseher als Hologramm-Kugel. Ring hinten blass, vorne über der Kugel; st: '' | 'work' | 'wait'
+    const t = -((Date.now() / 1000) % 120); // Animation läuft über Neuzeichnen hinweg weiter
+  const ring = (cls, d) => '<svg class="orbsv" viewBox="0 0 100 100" aria-hidden="true"><g transform="rotate(-14 50 53)"><path class="orbring' + cls + '" d="' + d + '" pathLength="1000"/>' + (cls ? '' : '<circle class="orbdot" r="1.3"><animateMotion begin="' + (t % 5).toFixed(2) + 's" dur="5s" repeatCount="indefinite" path="M97 53 A47 10 0 0 1 3 53 A47 10 0 0 1 97 53"/></circle>') + '</g></svg>';
+    return '<div class="orb' + (st ? ' ' + st : '') + '" style="--t:' + t.toFixed(2) + 's"' + (title ? ' title="' + esc(title) + '"' : '') + '><div class="orbfl">' + ring(' b', 'M3 53 A47 10 0 0 1 97 53') +
+      '<img src="' + src + '" alt="Hydra, die Aufseherin"><div class="orbclip"><i class="orbscan"></i></div>' +
+      [[28.1, 45.1, 0], [46.3, 38.3, .08], [52.8, 38.3, .08], [71.9, 45.1, .16]].map(e => '<i class="orbeye" style="left:' + e[0] + '%;top:' + e[1] + '%;animation-delay:' + e[2] + 's"></i>').join('') +
+      ring('', 'M97 53 A47 10 0 0 1 3 53') + [18, 34, 62, 80, 48].map((x, i) => '<i class="orbpt" style="left:' + x + '%;top:' + (70 + i % 3 * 6) + '%;animation-delay:' + (i * .8) + 's"></i>').join('') + '</div></div>';
+  }
   function vMap() {
     const ag = stOnline() ? arr(S.st && S.st.jobs) : [];
     const rooms = ROOMS.map(r => { const js = ag.filter(a => a.room === r[0]); const on = js.length > 0; const need = js.some(a => a.needs); const L = r[3] === 'L';
@@ -98,7 +121,7 @@
         return '<div class="mb walk w' + ri + '" style="animation-delay:' + d.toFixed(2) + 's;margin-left:' + (i * 24) + 'px;animation-duration:' + dur + 's">' + BOT(r[2]) + '<i class="pkt" style="--c:' + r[2] + ';animation-delay:' + d.toFixed(2) + 's;animation-duration:' + dur + 's"></i></div>'; }).join(''); }).join('');
     const P = 'M179 124V442M164 202H194M164 322H194M164 442H194';
     return '<section class="card"><h3>Agenten-Station' + (ag.length ? ' · ' + ag.length + ' aktiv' : '') + '</h3><div class="map"><svg class="corr" width="358" height="506" viewBox="0 0 358 506" aria-hidden="true"><path d="' + P + '" stroke="#22324A" stroke-width="16" fill="none"/><path d="' + P + '" stroke="#0F1724" stroke-width="13" fill="none"/></svg>' +
-      '<div class="ring"></div><div class="hub"><img src="hub.png" alt="Hydra, die Aufseherin" width="112" height="112"></div>' + rooms + bots + '</div>' + (stOnline() ? '' : '<p class="muted small">PC nicht erreichbar, die Karte zeigt keine Aufträge.</p>') + '</section>';
+      orbHtml('orb.webp', ag.some(a => a.needs) ? 'wait' : ag.length ? 'work' : '') + rooms + bots + '</div>' + (stOnline() ? '' : '<p class="muted small">PC nicht erreichbar, die Karte zeigt keine Aufträge.</p>') + '</section>';
   }
   function vProject(p) {
     const n = npc(p); const d = p.data || {}; const ts = arr(d.tasks); const doneN = ts.filter(t => t.status === 'done').length;
@@ -114,7 +137,7 @@
       (n.state !== 'laeuft' && n.reasonText ? '<p class="why">' + esc(REASON[n.reason] ? REASON[n.reason] + ': ' : '') + esc(n.reasonText) + '</p>' : '') +
       (run && n.step ? '<p class="step">Gerade: ' + esc(n.step) + '</p>' : '') +
       (my && pend.length ? '<div class="block warnb"><h3>Wartet auf dich</h3>' + pend.map(a => { const sent = wt.find(x => x.kind === 'approve' && x.reqId === a.reqId);
-        return '<div class="appr"><b>' + esc(a.explain || a.why || 'Freigabe') + '</b>' + (a.code ? '<code>' + esc(a.code) + '</code>' : '') + (a.verdict ? '<span class="verd' + (a.crit ? ' crit' : '') + '">' + esc(a.verdict) + '</span>' : '') + (a.tn ? '<span class="muted small">Task #' + a.tn + '</span>' : '') +
+        return '<div class="appr"><b>' + esc(a.explain || a.why || 'Freigabe') + '</b>' + (a.code ? cpw('<code class="cpt">' + esc(a.code) + '</code>', a.code) : '') + (a.verdict ? '<span class="verd' + (a.crit ? ' crit' : '') + '">' + esc(a.verdict) + '</span>' : '') + (a.tn ? '<span class="muted small">Task #' + a.tn + '</span>' : '') +
           (sent ? '<span class="muted small">' + (sent.allow ? 'Erlaubt' : 'Abgelehnt') + ' · wartet auf den PC …</span>' : '<div class="row"><button class="btn p" data-act="approve" data-id="' + esc(p.id) + '" data-k="' + esc(a.reqId) + '" data-v="1">Erlauben</button><button class="btn" data-act="approve" data-id="' + esc(p.id) + '" data-k="' + esc(a.reqId) + '" data-v="0">Ablehnen</button></div>') + '</div>'; }).join('') + '</div>' : '') +
       '<div class="kpis"><div><span class="lbl">Budget</span><b>' + usd(n.spent || 0) + ' / ' + usd(n.budget || 0) + '</b>' + meter(n.budget ? (n.spent || 0) / n.budget : 0) + '</div>' +
       '<div><span class="lbl">' + (ph ? 'Phase ' + ph : 'Alle Phasen') + '</span><b>' + phDone + ' / ' + inPh.length + '</b>' + meter(inPh.length ? phDone / inPh.length : 1, 'var(--ok)') + '</div>' +
@@ -122,22 +145,22 @@
       (my && n.on && n.state !== 'fertig' ? '<div class="row ctl">' + (run ? '<button class="btn p" data-act="ctl" data-id="' + esc(p.id) + '" data-k="stopAfter">Nach Schritt anhalten</button><button class="btn" data-act="ctl" data-id="' + esc(p.id) + '" data-k="stopNow">Stopp</button>' : '<button class="btn p" data-act="ctl" data-id="' + esc(p.id) + '" data-k="resume"' + (on ? '' : ' disabled') + '>' + (n.reason === 'meilenstein' ? 'Weiter zum nächsten Meilenstein' : 'Fortsetzen') + '</button>') + '</div>' +
         (wt.some(x => x.kind === 'ctl') ? '<p class="muted small">Befehl gesendet · wartet auf den PC …</p>' : '') + (!on ? '<p class="muted small">Steuern geht nur, wenn HydraForge auf dem PC läuft.</p>' : '') : '') +
       (my && arr(n.blocked).length && !run ? '<div class="block"><h3>Gescheiterte Tasks</h3>' + arr(n.blocked).map(b => '<div class="q"><span><b>#' + b.n + ' ' + esc(b.t) + '</b>' + (b.cnt ? ' · blockiert ' + b.cnt : '') + (b.conflict ? ' · <b class="crit">Konflikt</b>' : '') + '</span>' + (b.why ? '<span class="muted small">' + esc(b.why) + '</span>' : '') +
-        (b.report ? '<details><summary>Was die Prüfung gefunden hat</summary><div class="log">' + esc(b.report) + '</div></details>' : '') +
+        (b.report ? '<details><summary>Was die Prüfung gefunden hat</summary>' + cpw('<div class="log cpt">' + esc(b.report) + '</div>', b.report) + '</details>' : '') +
         '<div class="row wrap">' + (b.manual ? [['manual', b.manual], ['skip', 'Überspringen']] : b.conflict ? [['resolve', 'Konflikt lösen lassen'], ['reset', 'Neu aufsetzen'], ['skip', 'Überspringen']] : [['retry', 'Neu versuchen'], ['reset', 'Neu aufsetzen'], ['done', 'Erledigt'], ['skip', 'Überspringen']]).map((x, i) => '<button class="btn sm' + (i === 0 ? ' p' : '') + '" data-act="task" data-id="' + esc(p.id) + '" data-k="' + x[0] + '" data-t="' + esc(b.tid) + '">' + esc(x[1]) + '</button>').join('') + '</div></div>').join('') + '</div>' : '') +
       (my && arr(n.forYou).length ? '<div class="block"><h3>Für dich · Handarbeit</h3>' + arr(n.forYou).map(f => '<div class="q"><span><b>#' + f.n + ' ' + esc(f.t) + '</b></span><div class="row wrap">' + (f.ready ? '<button class="btn sm p" data-act="task" data-id="' + esc(p.id) + '" data-k="done" data-t="' + esc(f.tid) + '">Alle Assets fertig · abschließen</button>' : (f.kind !== 'map' ? '<button class="btn sm p" data-act="tab" data-k="assets" data-hl="' + esc(p.id + ':' + f.n) + '">' + esc(f.label) + '</button>' : '<span class="muted small">Baust du am PC in Unity.</span>') + '<button class="btn sm" data-act="task" data-id="' + esc(p.id) + '" data-k="done" data-t="' + esc(f.tid) + '">Erledigt</button>') + '<button class="btn sm" data-act="task" data-id="' + esc(p.id) + '" data-k="code" data-t="' + esc(f.tid) + '">Doch programmieren</button></div></div>').join('') + '</div>' : '') +
       (my && (n.vsPending || 0) >= 10 ? '<p class="why">Gesamtabgleich fällig: ' + n.vsPending + ' neue Entscheidungen seit der letzten Vision. Den Abgleich machst du am PC im Vision-Reiter.</p>' : '') +
       (qs.length ? '<div class="block"><h3>Fragen · ' + qs.length + '</h3>' + qs.map(q => { const sent = wt.find(x => x.kind === 'answer' && x.qid === q.id);
-        return '<div class="q' + (q.crit ? ' crit' : '') + '"><span>' + (q.crit ? '<b class="crit">KRITISCH</b> · ' : '') + (q.tn ? '#' + q.tn + ' · ' : '') + esc(q.q) + '</span>' + (q.guess ? '<span class="muted small">Vorschlag: ' + esc(q.guess) + '</span>' : '') +
+        return '<div class="q' + (q.crit ? ' crit' : '') + '">' + cpw('<span class="cpt">' + (q.crit ? '<b class="crit">KRITISCH</b> · ' : '') + (q.tn ? '#' + q.tn + ' · ' : '') + esc(q.q) + '</span>', q.q) + (q.guess ? '<span class="muted small">Vorschlag: ' + esc(q.guess) + '</span>' : '') +
           (!my ? '' : sent ? '<span class="muted small">Gesendet · wartet auf den PC …</span>' : '<input id="q_' + esc(q.id) + '" placeholder="' + (q.guess ? 'Leer = Vorschlag übernehmen' : 'Deine Antwort') + '" value="' + esc(S.drafts['q_' + q.id] || '') + '"><textarea id="qx_' + esc(q.id) + '" rows="2" placeholder="Ergänzung (optional)">' + esc(S.drafts['qx_' + q.id] || '') + '</textarea><button class="btn' + (q.crit ? ' p' : '') + '" data-act="answer" data-id="' + esc(p.id) + '" data-k="' + esc(q.id) + '">Senden</button>') + '</div>'; }).join('') + '</div>' : '') +
 
-      (my && n.shotRemote ? '<div class="block"><h3>Letzter Spieltest · #' + esc(n.shotRemote.tn || '') + '</h3>' + (shot && shot.at === n.shotRemote.at ? '<img class="shot" src="' + shot.url + '" alt="Screenshot aus dem Spieltest">' : '<button class="btn sm" data-act="shot" data-id="' + esc(p.id) + '">Bild anzeigen</button>') + '<span class="muted small">Nur angezeigt, nicht gespeichert.</span></div>' : '') +
+      (my && n.shotRemote ? '<div class="block"><h3>Letzter Spieltest · #' + esc(n.shotRemote.tn || '') + '</h3>' + (shot && shot.at === n.shotRemote.at ? '<div class="cpw"><img class="shot" src="' + shot.url + '" alt="Screenshot aus dem Spieltest"><button class="cpb" data-act="cpImg" data-id="' + esc(p.id) + '" aria-label="Bild kopieren oder teilen">' + CPI + '</button></div>' : '<button class="btn sm" data-act="shot" data-id="' + esc(p.id) + '">Bild anzeigen</button>') + '</div>' : '') +
       (my && n.on ? '<details class="block"' + (S.drafts['open_more_' + p.id] ? ' open' : '') + '><summary data-act="more" data-id="' + esc(p.id) + '">Ergänzen, Budget, Reparatur</summary>' +
         '<label>Ergänzung zum Projekt<textarea id="note_' + esc(p.id) + '" rows="3" placeholder="z. B. Gebäude zeigen beim Platzieren eine Vorschau">' + esc(S.drafts['note_' + p.id] || '') + '</textarea></label>' +
         '<div class="row wrap"><input id="notetn_' + esc(p.id) + '" inputmode="numeric" placeholder="zu Task # (optional)" value="' + esc(S.drafts['notetn_' + p.id] || '') + '" style="flex:1 1 140px"><button class="btn sm" data-act="note" data-id="' + esc(p.id) + '">Als Klärung</button><button class="btn sm p" data-act="noteTask" data-id="' + esc(p.id) + '">Als neuen Task</button></div>' +
         '<label>Budget für diesen Lauf ($)<input id="bud_' + esc(p.id) + '" inputmode="decimal" value="' + esc(S.drafts['bud_' + p.id] || n.budget || '') + '"></label>' +
         '<div class="row wrap"><button class="btn sm" data-act="mode" data-id="' + esc(p.id) + '" data-k="1"' + (Number(n.mode) === 1 ? ' disabled' : '') + '>Copilot</button><button class="btn sm" data-act="mode" data-id="' + esc(p.id) + '" data-k="2"' + (Number(n.mode) === 2 ? ' disabled' : '') + '>Autopilot</button><button class="btn sm p" data-act="budget" data-id="' + esc(p.id) + '">Budget speichern</button></div>' +
         '<div class="row wrap" style="margin-top:10px"><button class="btn sm" data-act="repair" data-id="' + esc(p.id) + '">Projekt prüfen und reparieren</button><button class="btn sm" data-act="ctl" data-id="' + esc(p.id) + '" data-k="end">NPC-Modus beenden</button></div><span class="muted small">Prüft Kompilieren, einen kurzen Spieltest und fehlende Verweise. Gefundene Fehler werden ein Reparatur-Task.</span></details>' : '') +
-      (arr(n.log).length ? '<details class="block"' + (S.logOpen[p.id] ? ' open' : '') + '><summary data-act="log" data-id="' + esc(p.id) + '">Verlauf</summary><div class="log">' + arr(n.log).slice(-14).reverse().map(l => esc(hhmm(l.at) + '  ' + l.text)).join('<br>') + '</div></details>' : '') + '</section>';
+      (arr(n.log).length ? '<details class="block"' + (S.logOpen[p.id] ? ' open' : '') + '><summary data-act="log" data-id="' + esc(p.id) + '">Verlauf</summary>' + cpw('<div class="log cpt">' + arr(n.log).slice(-14).reverse().map(l => esc(hhmm(l.at) + '  ' + l.text)).join('<br>') + '</div>', arr(n.log).slice(-40).reverse().map(l => hhmm(l.at) + '  ' + l.text).join('\n')) + '</details>' : '') + '</section>';
   }
   function vStart() {
     const own = S.projects.some(p => { const n = npc(p); return n && n.on && n.state !== 'fertig' && mine(n); });
@@ -156,26 +179,40 @@
   function vStation() {
     const ps = S.projects.filter(p => npc(p) && (npc(p).on || npc(p).state === 'fertig'));
     ps.sort((a, b) => (mine(npc(b)) ? 1 : 0) - (mine(npc(a)) ? 1 : 0));
-    return vDialogs() + vMap() + (ps.length ? ps.map(vProject).join('') : '<section class="card"><p class="muted">Gerade ist kein NPC-Modus aktiv.</p></section>') + vStart();
+    return vMap() + vDialogs() + (ps.length ? ps.map(vProject).join('') : '<section class="card"><p class="muted">Gerade ist kein NPC-Modus aktiv.</p></section>') + vStart();
   }
   function vResearch() {
     const R = (S.st && S.st.research) || {}; const q = arr(R.queue); const un = arr(R.unverified); const dc = R.disc; const dirs = arr(R.dirs).length ? R.dirs : [['ueberrasch', 'Überrasch mich']];
     const tiers = arr(S.st && S.st.tiers); const tsel = (id, def) => tiers.length ? '<label>KI-Modell<select id="' + id + '">' + tiers.map(t => '<option value="' + esc(t[0]) + '"' + ((S.drafts[id] || def) === t[0] ? ' selected' : '') + '>' + esc(t[1]) + (t[0] === 'local' ? ' · kostenlos' : '') + '</option>').join('') + '</select></label>' : '';
-    return '<section class="card"><h3>Spiele recherchieren</h3><label>Titel (mehrere mit Komma)<textarea id="res_titles" rows="2" placeholder="z. B. Anno 1800, They Are Billions">' + esc(S.drafts.res_titles || '') + '</textarea></label>' + tsel('res_tier', S.st && S.st.tierRes) +
+    const runQ = q.find(x => x.status === 'läuft'); const waitN = q.filter(x => x.status === 'wartet').length;
+    const runBox = runQ || R.running ? '<section class="card resrun"><div class="row"><span class="spin" aria-hidden="true"></span><h3 style="margin:0;flex:1">Recherche läuft' + (runQ ? ': ' + esc(runQ.title) : '') + '</h3></div>' +
+      (runQ ? '<span class="muted small">' + esc(runQ.detail || 'Quellen werden abgefragt …') + (runQ.tier && String(runQ.detail || '').indexOf(runQ.tier) < 0 ? ' · ' + esc(runQ.tier) : '') + (runQ.since ? ' · seit <span data-since="' + runQ.since + '">' + Math.max(0, Math.round((Date.now() - runQ.since) / 1000)) + ' s</span>' : '') + '</span>' : '') +
+      '<div class="indet"><i></i></div><div class="row"><span class="muted small" style="flex:1">' + (waitN ? waitN + ' weitere in der Warteschlange' : 'Danach ist die Warteschlange leer') + '</span>' + (runQ ? '<button class="btn sm" data-act="resStop">Abbrechen</button>' : '') + '</div></section>' : '';
+    const unvBox = !un.length ? "" : '<section class="card"><h3>Ungeprüfte Ergebnisse · ' + un.length + '</h3>' + (un.length ? '<p class="muted small">Lies kurz Beschreibung und Ideen-Karten. Passt alles, bestätige. Sonst verwerfen.</p>' + un.map(g => { const open = S.resOpen[g.id] !== false;
+        const desc = [g.idea, g.genres && g.genres.length ? 'Genre: ' + g.genres.join(', ') : '', g.studio ? 'Studio: ' + g.studio : ''].filter(Boolean).join('\n');
+        return '<div class="resg"><button class="resh" data-act="resOpen" data-k="' + esc(g.id) + '" aria-expanded="' + open + '"><span><b>' + esc(g.title) + '</b>' + (g.year ? ' (' + g.year + ')' : '') + ' <span class="muted small">' + g.cards + ' Ideen-Karten</span></span><span class="muted">' + (open ? '▾' : '▸') + '</span></button>' +
+          (open ? (desc ? cpw('<p class="cpt resd">' + esc(g.idea || '') + (g.genres && g.genres.length ? '<br><span class="muted small">' + esc(g.genres.join(' · ')) + (g.studio ? ' · ' + esc(g.studio) : '') + '</span>' : '') + '</p>', g.title + '\n' + desc) : '') +
+            (arr(g.src).length ? '<div class="row wrap small">' + arr(g.src).map(u => '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(/steam/i.test(u) ? 'Steam' : /wikipedia/i.test(u) ? 'Wikipedia' : u.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]) + ' ↗</a>').join('') + '</div>' : '') +
+            arr(g.list).map(c => '<div class="icard" style="--kc:' + esc(c.color || '#7CC8FF') + '"><span class="ik">' + esc(c.kind) + '</span><b>' + esc(c.title) + '</b><span class="small">' + esc(c.text) + '</span></div>').join('') : '') +
+          '<div class="row"><button class="btn sm p" data-act="verify" data-k="' + esc(g.id) + '">Bestätigen</button><button class="btn sm" data-act="discard" data-k="' + esc(g.id) + '">Verwerfen</button></div></div>'; }).join('') + (un.length > 1 ? '<button class="btn wide" data-act="verifyAll">Alle ' + un.length + ' bestätigen</button>' : '') : '<p class="muted">Nichts zu prüfen.</p>') + '</section>';
+    return runBox + unvBox + '<section class="card"><h3>Spiele recherchieren</h3><label>Titel (mehrere mit Komma)<textarea id="res_titles" rows="2" placeholder="z. B. Anno 1800, They Are Billions">' + esc(S.drafts.res_titles || '') + '</textarea></label>' + tsel('res_tier', S.st && S.st.tierRes) +
       '<label class="chk"><input type="checkbox" id="res_deep"' + (S.drafts.res_deep === '1' ? ' checked' : '') + '><span>Gründlich (mehr Quellen, kostet mehr)</span></label><button class="btn p wide" data-act="research">Recherchieren</button></section>' +
       '<section class="card"><h3>Neue Spiele entdecken</h3><label>Richtung<select id="disc_dir">' + dirs.map(x => '<option value="' + esc(x[0]) + '"' + ((S.drafts.disc_dir || 'ueberrasch') === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>').join('') + '</select></label>' +
       ((S.drafts.disc_dir || '') === 'genre' ? '<label>Genre<input id="disc_genre" value="' + esc(S.drafts.disc_genre || '') + '" placeholder="z. B. Aufbauspiel"></label>' : '') + tsel('disc_tier', S.st && S.st.tierDisc) + '<button class="btn wide" data-act="discover">Vorschläge holen</button>' +
       (dc ? '<div class="block"><h3>' + esc(dc.richtung) + ' · ' + arr(dc.list).length + ' Vorschläge</h3>' + arr(dc.list).map((g, i) => '<label class="chk' + (g.skip ? ' off' : '') + '"><input type="checkbox" id="dc_' + i + '"' + ((S.drafts['dc_' + i] !== undefined ? S.drafts['dc_' + i] === '1' : g.on) ? ' checked' : '') + '><span><b>' + esc(g.titel) + '</b>' + (g.jahr ? ' (' + g.jahr + ')' : '') + '<br><span class="muted small">' + esc(g.skip || g.warum) + '</span></span></label>').join('') +
         '<div class="row"><button class="btn p" data-act="discGo">Ausgewählte recherchieren</button><button class="btn" data-act="discDrop">Verwerfen</button></div></div>' : '') + '</section>' +
-      (q.length ? '<section class="card"><h3>Warteschlange' + (R.running ? ' · läuft' : '') + '</h3>' + q.slice().reverse().map(x => '<div class="qrow"><span>' + esc(x.title) + '</span><span class="pill ' + (x.status === 'läuft' ? 'run' : x.status === 'fertig' ? 'fin' : x.status === 'fehler' || x.status === 'verworfen' ? 'warn' : '') + '">' + esc(x.status) + '</span>' + (x.msg ? '<span class="muted small">' + esc(x.msg) + '</span>' : '') + '</div>').join('') + '</section>' : '') +
-      '<section class="card"><h3>Ungeprüfte Ergebnisse · ' + un.length + '</h3>' + (un.length ? un.map(g => '<div class="qrow"><span><b>' + esc(g.title) + '</b>' + (g.year ? ' (' + g.year + ')' : '') + ' <span class="muted small">' + g.cards + ' Ideen-Karten</span></span><div class="row"><button class="btn sm p" data-act="verify" data-k="' + esc(g.id) + '">Bestätigen</button><button class="btn sm" data-act="discard" data-k="' + esc(g.id) + '">Verwerfen</button></div></div>').join('') + (un.length > 1 ? '<button class="btn wide" data-act="verifyAll">Alle ' + un.length + ' bestätigen</button>' : '') : '<p class="muted">Nichts zu prüfen.</p>') + '</section>';
+      (q.length ? '<section class="card"><h3>Warteschlange' + (R.running ? ' · läuft' : '') + '</h3>' + q.slice().reverse().map(x => '<div class="qrow"><span>' + esc(x.title) + '</span><span class="pill ' + (x.status === 'läuft' ? 'run' : x.status === 'fertig' ? 'fin' : x.status === 'fehler' || x.status === 'verworfen' ? 'warn' : '') + '">' + esc(x.status) + '</span>' + (x.msg ? '<span class="muted small">' + esc(x.msg) + '</span>' : '') + '</div>').join('') + '</section>' : '');
   }
   // ---------- Assets (Asset-Werft) ----------
   function vAssets() {
     const A = S.st && S.st.assets; if (!A) return '<section class="card"><p class="muted">' + (stOnline() ? 'Asset Studio wird am PC geladen …' : 'Der PC ist nicht erreichbar.') + '</p></section>';
     const cr = A.credits || {}; const hl = S.assetHl;
     const orders = arr(A.orders); const projOpts = arr(S.st.projects).map(x => '<option value="' + esc(x.id) + '">' + esc(x.name) + '</option>').join('');
-    return '<section class="card"><h3>Meshy-Credits</h3><b>' + Math.max(0, (cr.limit || 0) - (cr.used || 0)) + ' von ' + (cr.limit || 0) + ' frei</b>' + meter(cr.limit ? (cr.used || 0) / cr.limit : 0, '#FF7AB6') + '<span class="muted small">Grenze je Modell ' + (cr.perModel || 0) + ' Credits' + (cr.key ? '' : ' · am PC fehlt der Meshy-Schlüssel') + '</span></section>' +
+    const crP = cr.limit ? (cr.used || 0) / cr.limit : 0;
+    return '<section class="card"><h3>Meshy</h3><div class="row"><span class="muted small" style="flex:1">Konto</span><b>' + (cr.bal != null ? Number(cr.bal).toLocaleString('de-DE') + ' Credits' : '–') + '</b></div>' +
+      '<div class="row" style="margin-top:8px"><span class="muted small" style="flex:1">Verbraucht diesen Monat</span><b>' + Number(cr.used || 0).toLocaleString('de-DE') + ' / ' + Number(cr.limit || 0).toLocaleString('de-DE') + '</b></div>' +
+      '<div class="bwbar ' + (crP >= 0.85 ? 'hi' : crP >= 0.6 ? 'mid' : '') + '"><i style="width:' + Math.min(100, crP * 100).toFixed(1) + '%"></i><em style="left:80%"></em></div>' +
+      '<span class="muted small">Dein Limit für HydraForge, einstellbar am PC unter Verbrauch · je Modell höchstens ' + (cr.perModel || 0) + ' Credits' + (cr.key ? '' : ' · am PC fehlt der Meshy-Schlüssel') + '</span></section>' +
       (orders.length ? '<section class="card"><h3>Offene Asset-Aufträge · ' + orders.length + '</h3>' + orders.map(o => { const on = hl && hl === o.pid + ':' + o.task;
         return '<div class="qrow' + (on || o.need ? ' hl' : '') + '"><span><b>' + esc(o.name) + '</b> <span class="muted small">' + esc(o.pname) + ' · ' + esc(o.typ) + (o.task ? ' · Task #' + o.task : '') + '</span></span>' + (o.need ? '<span class="verd crit">Wird für Task #' + o.task + ' gebraucht</span>' : '') +
           (o.typ === 'modell' ? '<div class="row wrap"><button class="btn sm p" data-act="stOrder" data-k="' + esc(o.aid) + '" data-v="' + esc(o.name) + '" data-z="' + esc(o.zweck) + '">Mit Meshy erzeugen</button></div>' : '') + '</div>'; }).join('') + '</section>' : '') +
@@ -194,10 +231,18 @@
           '<button class="btn sm" data-act="stGame" data-k="' + esc(it.id) + '">Ins Spiel</button></div>' +
         (S.animFor === it.id ? vAnimPick(it) : '') + (S.gameFor === it.id ? '<div class="row wrap"><select id="st_pid">' + projOpts + '</select><button class="btn sm p" data-act="stGameGo" data-k="' + esc(it.id) + '">Einsetzen</button></div>' : '') + '</div>').join('') + '</section>';
   }
+  const ANCH = [['laufen', 'Laufen'], ['rennen', 'Rennen'], ['stehen', 'Stehen'], ['waffe', 'Mit Waffe'], ['kampf', 'Kampf'], ['springen', 'Springen'], ['sterben', 'Sterben'], ['treffer', 'Treffer'], ['tanzen', 'Tanzen'], ['fav', '★ Favoriten']];
   function vAnimPick(it) {
-    const L = S.st.assets.animLib; const sel = S.animSel[it.id] || [];
-    return '<div class="block"><div class="row"><input id="an_q" value="' + esc(S.drafts.an_q || '') + '" placeholder="idle, walk, shoot …"><button class="btn sm" data-act="stAnimLib">Suchen</button></div>' +
-      (L && arr(L.list).length ? arr(L.list).map(a => '<label class="chk anr"><input type="checkbox" data-act="anSel" data-k="' + esc(it.id) + '" data-v="' + a.id + '" data-n="' + esc(a.name) + '"' + (sel.some(x => x.id === a.id) ? ' checked' : '') + '>' + (a.prev ? (/\.(mp4|webm)(\?|$)/i.test(a.prev) ? '<video class="anprev" src="' + esc(a.prev) + '" muted loop autoplay playsinline></video>' : '<img class="anprev" src="' + esc(a.prev) + '" alt="" loading="lazy">') : '') + '<span>' + esc(a.name) + ' <span class="muted small">' + esc(a.cat || '') + '</span></span></label>').join('') : '<p class="muted small">Such nach einer Bewegung.</p>') +
+    const L = S.st.assets.animLib; const sel = S.animSel[it.id] || []; const chips = arr(L && L.chips); const favs = arr(S.st.assets.animFav); const show = S.anShow || 8;
+    return '<div class="block"><div class="row"><input id="an_q" value="' + esc(S.drafts.an_q || '') + '" placeholder="laufen gewehr, sterben …"><button class="btn sm" data-act="stAnimLib">Suchen</button></div>' +
+      '<div class="chips">' + ANCH.map(c => '<button class="chip' + (chips.includes(c[0]) ? ' on' : '') + '" data-act="anChip" data-k="' + c[0] + '" aria-pressed="' + chips.includes(c[0]) + '">' + c[1] + '</button>').join('') + '</div>' +
+      '<div class="row"><input id="an_ai" value="' + esc(S.drafts.an_ai || '') + '" placeholder="Beschreib es: Soldat geht mit Gewehr"><button class="btn sm" data-act="anAi">KI</button></div>' +
+      (L ? '<span class="muted small">' + (L.ai ? 'KI-Auswahl zu „' + esc(L.ai) + '“ · ' : '') + arr(L.list).length + ' von ' + (L.total || arr(L.list).length) + ' Treffern</span>' : '') +
+      (L && arr(L.list).length ? arr(L.list).slice(0, show).map(a => { const on = sel.some(x => x.id === a.id); const fav = favs.includes(a.id);
+        return '<div class="ancard' + (on ? ' on' : '') + '">' + (a.prev ? (/\.(mp4|webm)(\?|$)/i.test(a.prev) ? '<video class="anbig" src="' + esc(a.prev) + '" muted loop autoplay playsinline preload="metadata"></video>' : '<img class="anbig" src="' + esc(a.prev) + '" alt="" loading="lazy">') : '') +
+          '<button class="anstar' + (fav ? ' on' : '') + '" data-act="anFav" data-k="' + a.id + '" data-n="' + esc(a.name) + '" aria-pressed="' + fav + '" aria-label="Favorit">★</button>' +
+          '<label class="chk"><input type="checkbox" data-act="anSel" data-k="' + esc(it.id) + '" data-v="' + a.id + '" data-n="' + esc(a.name) + '"' + (on ? ' checked' : '') + '><span><b>' + esc(a.name.replace(/_/g, ' ')) + '</b><br><span class="muted small">' + esc(a.cat || '') + '</span></span></label></div>'; }).join('') +
+        (arr(L.list).length > show ? '<button class="btn wide" data-act="anMore">Weitere zeigen</button>' : '') : '<p class="muted small">Such eine Bewegung, tipp einen Filter an oder beschreib sie der KI.</p>') +
       (sel.length ? '<button class="btn p wide" data-act="stAnimGo" data-k="' + esc(it.id) + '">' + sel.length + ' Animationen erzeugen (≈ ' + sel.length * 3 + ' Credits)</button>' : '') + '<span class="muted small">Nach dem Erzeugen kannst du jede Animation in der 3D-Vorschau ansehen und ungeeignete entfernen.</span></div>';
   }
   // 3D-Vorschau auf dem Handy: eigene Ebene, nur im Speicher
@@ -221,7 +266,7 @@
   }
   function vSettings() {
     const pr = (S.st && S.st.prefs) || {}; const nf = pr.notify || {}; const u = S.usage;
-    const kinds = [['stop', 'NPC-Modus hält an'], ['approval', 'Kritische Freigabe wartet'], ['done', 'NPC-Modus ist fertig'], ['dialog', 'Unity wartet auf eine Antwort']];
+    const kinds = [['stop', 'NPC-Modus hält an'], ['approval', 'Kritische Freigabe wartet'], ['done', 'NPC-Modus ist fertig'], ['dialog', 'Unity wartet auf eine Antwort'], ['budget', 'Ein Limit ist zu 80 % verbraucht']];
     return '<section class="card"><h3>Dein Verbrauch</h3>' + (u ? '<div class="kpis two"><div><span class="lbl">Diesen Monat</span><b>' + usd(u.month) + '</b>' + (pr.monthLimit ? meter(u.month / pr.monthLimit) + '<span class="muted small">von ' + usd(pr.monthLimit) + '</span>' : '') + '</div><div><span class="lbl">Heute</span><b>' + usd(u.day) + '</b>' + (pr.dayLimit ? meter(u.day / pr.dayLimit, 'var(--ok)') + '<span class="muted small">NPC-Tageslimit ' + usd(pr.dayLimit) + '</span>' : '') + '</div></div>' : '<p class="muted">Wird geladen …</p>') +
       '<span class="muted small">Alles läuft über deinen eigenen Schlüssel und zählt gegen dein eigenes Limit.</span></section>' +
       '<section class="card"><h3>Limits</h3><label>Monatslimit ($, 0 = keins)<input id="lim_month" inputmode="decimal" value="' + esc(S.drafts.lim_month !== undefined ? S.drafts.lim_month : pr.monthLimit || 0) + '"></label><button class="btn wide" data-act="saveMonth">Monatslimit speichern</button>' +
@@ -230,7 +275,7 @@
       kinds.map(k => '<label class="chk"><input type="checkbox" id="nf_' + k[0] + '"' + (nf[k[0]] !== false ? ' checked' : '') + '><span>' + k[1] + '</span></label>').join('') + '<button class="btn wide" data-act="saveNotify">Auswahl speichern</button></section>' +
       '<section class="card"><p class="muted small">Angemeldet als ' + esc(S.user.email) + '</p><button class="btn wide" data-act="logout">Abmelden</button></section>';
   }
-  function liveTick() { const el = document.getElementById('liveago'); if (el) { const s = Math.max(0, Math.round((Date.now() - S.at) / 1000)); el.textContent = 'Live · vor ' + s + ' s'; } }
+  function liveTick() { document.querySelectorAll('[data-since]').forEach(x => { const s0 = Math.max(0, Math.round((Date.now() - Number(x.getAttribute('data-since'))) / 1000)); x.textContent = s0 < 90 ? s0 + ' s' : Math.round(s0 / 60) + ' min'; }); const el = document.getElementById('liveago'); if (el) { const s = Math.max(0, Math.round((Date.now() - S.at) / 1000)); el.textContent = 'Live · vor ' + s + ' s'; } }
   function render() {
     const a = document.activeElement; const fid = a && a.id; const val = a && a.value; const sel = a && a.selectionStart;
     if (!S.user) { app.innerHTML = vLogin(); return; }
@@ -315,7 +360,15 @@
       if (act === 'st3d') { await mvShow(k); return; }
       if (act === 'stRig') { if (!confirm('Modell riggen? Etwa 5 Meshy-Credits. Nur für menschenähnliche Figuren.')) return; await cmd('stRig', { itemId: k }, 'Rigging läuft'); return; }
       if (act === 'stAnimOpen') { S.animFor = S.animFor === k ? null : k; render(); return; }
-      if (act === 'stAnimLib') { await cmd('stAnimLib', { q: S.drafts.an_q || '' }, 'Suche läuft'); return; }
+      if (act === 'stAnimLib') { S.anShow = 8; await cmd('stAnimLib', { q: S.drafts.an_q || '', chips: arr(S.st && S.st.assets && S.st.assets.animLib && S.st.assets.animLib.chips) }, 'Suche läuft'); return; }
+      if (act === 'anChip') { const c = arr(S.st && S.st.assets && S.st.assets.animLib && S.st.assets.animLib.chips); S.anShow = 8; await cmd('stAnimLib', { q: S.drafts.an_q || '', chips: c.includes(k) ? c.filter(x => x !== k) : c.concat([k]) }, 'Filter gesendet'); return; }
+      if (act === 'anAi') { const d = String(S.drafts.an_ai || '').trim(); if (!d) { flash('Beschreib kurz die Bewegung.', true); return; } S.anShow = 8; await cmd('stAnimAi', { desc: d }, 'KI sucht aus'); return; }
+      if (act === 'anFav') { await cmd('stAnimFav', { id: Number(k), name: b.getAttribute('data-n') }, 'Favorit gesendet'); return; }
+      if (act === 'anMore') { S.anShow = (S.anShow || 8) + 8; render(); return; }
+      if (act === 'cpTxt') { try { await navigator.clipboard.writeText((S.cp || {})[k] || ''); flash('Kopiert.'); } catch (err) { flash('Kopieren ging nicht.', true); } return; }
+      if (act === 'cpImg') { const sh = S.shots[id]; if (sh) await cpImg(sh.url); return; }
+      if (act === 'resOpen') { S.resOpen[k] = S.resOpen[k] === false; render(); return; }
+      if (act === 'resStop') { if (!confirm('Laufende Recherche abbrechen?')) return; await cmd('resStop', {}, 'Abbruch gesendet'); return; }
       if (act === 'anSel') { const it = b.getAttribute('data-k'); const id = Number(b.getAttribute('data-v')); const list = S.animSel[it] = S.animSel[it] || []; const i = list.findIndex(x => x.id === id); if (i >= 0) list.splice(i, 1); else if (list.length < 10) list.push({ id: id, name: b.getAttribute('data-n') }); render(); return; }
       if (act === 'stAnimGo') { const list = S.animSel[k] || []; if (!confirm(list.length + ' Animationen erzeugen? Etwa ' + list.length * 3 + ' Meshy-Credits.')) return; await cmd('stAnim', { itemId: k, actions: list }, 'Animationen werden erzeugt'); S.animSel[k] = []; S.animFor = null; return; }
       if (act === 'stGame') { S.gameFor = S.gameFor === k ? null : k; render(); return; }
@@ -330,7 +383,7 @@
       if (act === 'discard') { if (!confirm('Dieses Ergebnis verwerfen? Es wird aus der Bibliothek gelöscht.')) return; await cmd('discard', { gid: k }, 'Verworfen'); return; }
       if (act === 'saveMonth') { const v = Math.max(0, Number(String(S.drafts.lim_month || 0).replace(',', '.')) || 0); const r = await S.sb.rpc('set_my_limit', { v: v }); if (r.error) flash(r.error.message, true); else { flash(v ? 'Monatslimit gespeichert.' : 'Monatslimit aufgehoben.'); delete S.drafts.lim_month; } return; }
       if (act === 'saveDay') { const v = Math.max(0, Number(String(S.drafts.lim_day || 0).replace(',', '.')) || 0); await cmd('prefs', { dayLimit: v }, 'Tageslimit gesendet'); delete S.drafts.lim_day; return; }
-      if (act === 'saveNotify') { const nf = {}; ['stop', 'approval', 'done', 'dialog'].forEach(x => { const el = document.getElementById('nf_' + x); nf[x] = !el || el.checked; }); await cmd('prefs', { notify: nf }, 'Auswahl gesendet'); return; }
+      if (act === 'saveNotify') { const nf = {}; ['stop', 'approval', 'done', 'dialog', 'budget'].forEach(x => { const el = document.getElementById('nf_' + x); nf[x] = !el || el.checked; }); await cmd('prefs', { notify: nf }, 'Auswahl gesendet'); return; }
       if (!p) return;
       if (act === 'approve') { await send(p, { kind: 'approve', reqId: k, allow: b.getAttribute('data-v') === '1' }); return; }
       if (act === 'answer') { await send(p, { kind: 'answer', qid: k, value: (S.drafts['q_' + k] || '').trim(), extra: (S.drafts['qx_' + k] || '').trim() }); delete S.drafts['q_' + k]; delete S.drafts['qx_' + k]; return; }
