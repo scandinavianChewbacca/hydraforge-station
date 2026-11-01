@@ -66,7 +66,7 @@
       (n.state !== 'laeuft' && n.reasonText ? '<p class="why">' + esc(REASON[n.reason] ? REASON[n.reason] + ': ' : '') + esc(n.reasonText) + '</p>' : '') +
       (run && n.step ? '<p class="step">Gerade: ' + esc(n.step) + '</p>' : '') +
       (pend.length ? '<div class="block warnb"><h3>Freigabe nötig</h3>' + pend.map(a => { const sent = wt.find(x => x.kind === 'approve' && x.reqId === a.reqId);
-        return '<div class="appr"><b>' + esc(a.explain || a.why || 'Freigabe') + '</b>' + (a.tn ? '<span class="muted small">Task #' + a.tn + '</span>' : '') + '<code>' + esc(String(a.text || '').slice(0, 220)) + '</code>' +
+        return '<div class="appr"><b>' + esc(a.explain || a.why || 'Freigabe') + '</b>' + (a.code ? '<code>' + esc(a.code) + '</code>' : '') + (a.verdict ? '<span class="verd' + (a.crit ? ' crit' : '') + '">' + esc(a.verdict) + '</span>' : '') + (a.tn ? '<span class="muted small">Task #' + a.tn + '</span>' : '') + (a.text && !a.code ? '<details><summary>Befehl anzeigen</summary><code>' + esc(String(a.text).slice(0, 600)) + '</code></details>' : '') +
           (sent ? '<span class="muted small">' + (sent.allow ? 'Erlaubt' : 'Abgelehnt') + ' · wartet auf den PC …</span>' : '<div class="row"><button class="btn p" data-act="approve" data-id="' + esc(p.id) + '" data-k="' + esc(a.reqId) + '" data-v="1">Erlauben</button><button class="btn" data-act="approve" data-id="' + esc(p.id) + '" data-k="' + esc(a.reqId) + '" data-v="0">Ablehnen</button></div>') + '</div>'; }).join('') + '</div>' : '') +
       '<div class="kpis"><div><span class="lbl">Budget</span><b>' + usd(n.spent || 0) + ' / ' + usd(n.budget || 0) + '</b>' + meter(n.budget ? (n.spent || 0) / n.budget : 0) + '</div>' +
       '<div><span class="lbl">' + (ph ? 'Meilenstein · Phase ' + ph : 'Alle Phasen') + '</span><b>' + phDone + ' / ' + inPh.length + '</b>' + meter(inPh.length ? phDone / inPh.length : 1, 'var(--ok)') + '</div>' +
@@ -74,16 +74,44 @@
       (qs.length ? '<div class="block"><h3>Fragen · ' + qs.length + '</h3>' + qs.map(q => { const sent = wt.find(x => x.kind === 'answer' && x.qid === q.id);
         return '<div class="q' + (q.crit ? ' crit' : '') + '"><span>' + (q.crit ? '<b class="crit">KRITISCH</b> · ' : '') + (q.tn ? '#' + q.tn + ' · ' : '') + esc(q.q) + '</span>' + (q.guess ? '<span class="muted small">Vorschlag: ' + esc(q.guess) + '</span>' : '') +
           (sent ? '<span class="muted small">Gesendet · wartet auf den PC …</span>' : '<div class="row"><input id="q_' + esc(q.id) + '" placeholder="' + (q.guess ? 'Leer = Vorschlag übernehmen' : 'Deine Antwort') + '" value="' + esc(S.drafts['q_' + q.id] || '') + '"><button class="btn' + (q.crit ? ' p' : '') + '" data-act="answer" data-id="' + esc(p.id) + '" data-k="' + esc(q.id) + '">Senden</button></div>') + '</div>'; }).join('') + '</div>' : '') +
-      (ag.length && run ? '<div class="block"><h3>Agenten</h3>' + ag.map(a => '<div class="agent' + (a.needs ? ' need' : '') + '"><span class="bot" aria-hidden="true"></span><span><b>' + esc(a.label) + '</b><span class="muted small">' + esc((ROOM[a.room] || '') + (a.detail ? ' · ' + a.detail : '')) + '</span></span></div>').join('') + '</div>' : '') +
+      (n.on && n.state !== 'fertig' ? vRooms(ag, run) : '') +
       (n.on && n.state !== 'fertig' ? '<div class="row ctl">' + (run ? '<button class="btn p" data-act="ctl" data-id="' + esc(p.id) + '" data-k="stopAfter">Nach diesem Schritt anhalten</button><button class="btn" data-act="ctl" data-id="' + esc(p.id) + '" data-k="stopNow">Sofort stoppen</button>' : '<button class="btn p" data-act="ctl" data-id="' + esc(p.id) + '" data-k="resume"' + (on ? '' : ' disabled') + '>' + (n.reason === 'meilenstein' ? 'Weiter zum nächsten Meilenstein' : 'Fortsetzen') + '</button>') + '</div>' +
         (wt.some(x => x.kind === 'ctl') ? '<p class="muted small">Befehl gesendet · wartet auf den PC …</p>' : '') + (!on ? '<p class="muted small">Steuern geht nur, wenn HydraForge auf dem PC läuft.</p>' : '') : '') +
       (arr(n.log).length ? '<details><summary>Verlauf</summary><div class="log">' + arr(n.log).slice(-12).reverse().map(l => esc(hhmm(l.at) + '  ' + l.text)).join('<br>') + '</div></details>' : '')) + '</section>';
+  }
+  // Mini-Station: Räume mit kleinen Agenten-Bots (gelbes ! = wartet auf Freigabe)
+  const RCOL = { planung: '#B69CFF', werkstatt: '#FF9F43', labor: '#5BD69B', archiv: '#FFB454', werft: '#FF8A4C' };
+  const BOT = c => '<svg class="mbot" viewBox="0 0 32 40" aria-hidden="true" style="--c:' + c + '"><g class="mb"><line x1="16" y1="3" x2="16" y2="7" stroke="var(--c)" stroke-width="1.5"/><circle cx="16" cy="2.6" r="1.9" fill="var(--c)"/><rect x="6" y="7" width="20" height="15" rx="6" fill="#16202e" stroke="var(--c)" stroke-width="1.5"/><rect x="9" y="10.5" width="14" height="8" rx="4" fill="#070b12"/><rect class="eye" x="11.5" y="13" width="3" height="3" rx="1.5" fill="var(--c)"/><rect class="eye" x="17.5" y="13" width="3" height="3" rx="1.5" fill="var(--c)"/><rect x="9" y="23" width="14" height="10" rx="3.5" fill="#16202e" stroke="var(--c)" stroke-width="1.2"/><rect x="12.5" y="26.5" width="7" height="2.6" rx="1.3" fill="var(--c)"/></g><rect x="10.5" y="33" width="4" height="6" rx="1.6" fill="#2b3a50"/><rect x="17.5" y="33" width="4" height="6" rx="1.6" fill="#2b3a50"/></svg>';
+  function vRooms(ag, run) {
+    const rooms = ['planung', 'werkstatt', 'labor', 'werft'];
+    return '<div class="block"><h3>Agenten-Station</h3><div class="rooms">' + rooms.map(r => { const js = ag.filter(a => a.room === r); const c = RCOL[r];
+      return '<div class="mroom' + (js.length ? ' on' : '') + '" style="--c:' + c + '"><span class="rname">' + ROOM[r] + '</span><div class="rbots">' +
+        (js.length ? js.slice(0, 3).map(a => '<span class="mag' + (a.needs ? ' need' : '') + '" title="' + esc(a.label) + '">' + (a.needs ? '<i class="bang">!</i>' : '') + BOT(c) + '</span>').join('') : '<span class="mag idle">' + BOT('#4a5a72') + '<i class="zz">z</i></span>') +
+        '</div>' + (js.length ? '<span class="rdet">' + esc(js[0].label + (js[0].needs ? ' · wartet auf dich' : js[0].detail ? ' · ' + js[0].detail : '')) + '</span>' : '<span class="rdet muted">' + (run ? 'bereit' : 'ruht') + '</span>') + '</div>'; }).join('') + '</div></div>';
+  }
+  // Benachrichtigungen direkt von HydraForge (Web-Push, Schlüssel kommt vom PC über die Projektdaten)
+  const pushOk = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const pushOn = () => pushOk() && Notification.permission === 'granted' && !!store.get('hf_push_ep');
+  const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(r, c => c.charCodeAt(0)); };
+  async function pushEnable() {
+    const p = S.projects.find(x => npc(x) && npc(x).vapid && npc(x).on);
+    if (!p) { alert('Starte oder pausiere zuerst den NPC-Modus am PC. Dann kann sich das Handy anmelden.'); return; }
+    if (!pcOnline(npc(p))) { alert('Der PC ist gerade nicht erreichbar. HydraForge muss laufen, damit sich das Handy anmelden kann.'); return; }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { alert('Benachrichtigungen sind blockiert. Erlaube sie in den Chrome-Einstellungen für diese Seite.'); return; }
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    const key = npc(p).vapid;
+    if (sub && store.get('hf_push_key') !== key) { await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(key) });
+    await send(p, { pid: p.id, kind: 'pushsub', sub: sub.toJSON() });
+    store.set('hf_push_ep', sub.endpoint); store.set('hf_push_key', key); render();
   }
   function render() {
     const a = document.activeElement; const fid = a && a.id; const val = a && a.value;
     if (!S.user) { app.innerHTML = vLogin(); return; }
     const ps = S.projects.filter(p => npc(p) && (npc(p).on || npc(p).state === 'fertig'));
-    app.innerHTML = '<header class="top"><img src="icon-192.png" alt="" class="logo sm"><div><b>HydraForge Station</b><span class="muted small">' + (S.at ? 'Stand ' + hhmm(S.at) : '') + '</span></div><span class="grow"></span><button class="btn sm" data-act="reload">↻</button><button class="btn sm" data-act="logout">Abmelden</button></header>' +
+    app.innerHTML = '<header class="top"><img src="icon-192.png" alt="" class="logo sm"><div><b>HydraForge Station</b><span class="muted small">' + (S.at ? 'Stand ' + hhmm(S.at) : '') + '</span></div><span class="grow"></span>' + (pushOk() ? '<button class="btn sm' + (pushOn() ? ' on' : '') + '" data-act="push" aria-label="Benachrichtigungen" title="Benachrichtigungen">' + (pushOn() ? '🔔' : '🔕 Push an') + '</button>' : '') + '<button class="btn sm" data-act="reload">↻</button><button class="btn sm" data-act="logout">Abmelden</button></header>' +
       (S.err ? '<p class="err pad">' + esc(S.err) + '</p>' : '') +
       (ps.length ? ps.map(vProject).join('') : '<section class="card"><p>Gerade ist kein NPC-Modus aktiv. Starte ihn am PC in der Agenten-Station.</p></section>');
     if (fid) { const el = document.getElementById(fid); if (el) { el.focus(); if (val != null && el.value !== val) el.value = val; } }
@@ -101,6 +129,7 @@
     }
     if (act === 'logout') { await S.sb.auth.signOut(); S.user = null; render(); return; }
     if (act === 'reload') { await load(); return; }
+    if (act === 'push') { if (pushOn()) { if (confirm('Benachrichtigungen sind an. Neu anmelden (z. B. wenn keine mehr ankommen)?')) { store.del('hf_push_ep'); try { await pushEnable(); } catch (err) { alert('Anmelden fehlgeschlagen: ' + (err.message || err)); } } return; } try { await pushEnable(); } catch (err) { alert('Anmelden fehlgeschlagen: ' + (err.message || err)); } return; }
     if (act === 'toggle') { S.open[id] = S.open[id] === false; render(); return; }
     if (!p) return;
     if (act === 'approve') { await send(p, { pid: p.id, kind: 'approve', reqId: k, allow: b.getAttribute('data-v') === '1' }); return; }

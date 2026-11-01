@@ -15,7 +15,7 @@ input:focus{outline:2px solid var(--acc);outline-offset:0;border-color:transpare
 .btn.p{background:var(--acc);border-color:var(--acc);color:#06121F}
 .btn.sm{min-height:36px;padding:6px 10px;font-size:13px}
 .btn.wide{width:100%;margin-top:8px}.btn:disabled{opacity:.45}
-.top{display:flex;align-items:center;gap:10px;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}
+.top{display:flex;align-items:center;gap:8px;min-width:0;position:sticky;top:0;background:var(--bg);padding:8px 0;z-index:2}
 .top b{display:block}.grow{flex:1}
 .phead{all:unset;display:flex;width:100%;align-items:center;gap:8px;cursor:pointer}
 .pname{flex:1;font-weight:700;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -42,3 +42,24 @@ b.crit,.q.crit>span:first-child{color:var(--warn)}
 details{margin-top:12px}summary{cursor:pointer;color:var(--mut);font-size:13px}
 .log{font:12px/1.5 ui-monospace,Consolas,monospace;color:var(--mut);margin-top:6px}
 @media (max-width:420px){.kpis{grid-template-columns:1fr}}
+.verd{font-size:13px;color:var(--ok)}.verd.crit{color:var(--warn)}
+.btn.on{border-color:var(--acc)}
+.rooms{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mroom{position:relative;border:1px solid var(--line);border-radius:12px;padding:8px 10px 8px;background:linear-gradient(180deg,#0E1420,#101826);min-height:92px;display:flex;flex-direction:column;gap:4px}
+.mroom.on{border-color:color-mix(in srgb,var(--c) 60%,transparent);box-shadow:inset 0 -18px 30px -24px var(--c)}
+.rname{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--c)}
+.mroom:not(.on) .rname{color:var(--mut)}
+.rbots{display:flex;gap:6px;align-items:flex-end;min-height:40px}
+.mag{position:relative;display:inline-block;width:26px;height:33px}
+.mbot{width:26px;height:33px;display:block}
+.mroom.on .mb{animation:mbob 1.4s ease-in-out infinite}
+.mroom.on .eye{animation:blink 3.2s infinite}
+.mag.need .mb{animation:none}
+.bang{position:absolute;top:-8px;right:-6px;width:15px;height:15px;border-radius:50%;background:var(--warn);color:#1b1206;font:700 11px/15px system-ui;text-align:center;font-style:normal}
+.zz{position:absolute;top:-6px;right:-4px;font-size:10px;color:var(--mut);font-style:normal}
+.rdet{font-size:11.5px;line-height:1.3;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes mbob{50%{transform:translateY(-2px)}}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+.eye{transform-box:fill-box;transform-origin:center}
+@media (prefers-reduced-motion:reduce){.mroom.on .mb,.mroom.on .eye{animation:none}}
+.top>div{min-width:0}.top .btn.sm{padding:6px 9px;white-space:nowrap}
